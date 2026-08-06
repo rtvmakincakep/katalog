@@ -1,5 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useTransform,
+  type PanInfo,
+} from "framer-motion";
 import { PdfCanvas } from "@/components/PdfCanvas";
 import type { PdfDoc } from "@/lib/pdf";
 import { cn } from "@/utils/cn";
@@ -39,6 +46,25 @@ const variants = {
     z: -220,
     scale: 0.9,
     opacity: 0,
+  }),
+};
+
+/* A page pivots from its bound edge, then exposes a softly shaded paper back. */
+const singleFoldVariants = {
+  enter: (d: number) => ({
+    rotateY: d > 0 ? 12 : -12,
+    x: d > 0 ? "3%" : "-3%",
+    z: -80,
+    scale: 0.985,
+    opacity: 0.45,
+  }),
+  center: { rotateY: 0, x: "0%", z: 0, scale: 1, opacity: 1 },
+  exit: (d: number) => ({
+    rotateY: d > 0 ? -158 : 158,
+    x: d > 0 ? "-5%" : "5%",
+    z: 35,
+    scale: 0.985,
+    opacity: [1, 1, 0.65, 0],
   }),
 };
 
@@ -85,6 +111,11 @@ export function FlipViewer({
   onPrev,
 }: FlipProps) {
   const { ref, size } = useMeasure<HTMLDivElement>();
+  const dragX = useMotionValue(0);
+  const dragRotate = useTransform(dragX, [-500, 0, 500], [-42, 0, 42]);
+  const dragShade = useTransform(dragX, [-260, 0, 260], [0.58, 0, 0.58]);
+  const dragHighlight = useTransform(dragX, [-300, 0, 300], ["15%", "50%", "85%"]);
+  const [foldSide, setFoldSide] = useState<-1 | 1>(-1);
   const pad = size.w < 640 ? 16 : 40;
   const availW = Math.max(120, size.w - pad * 2);
   const availH = Math.max(160, size.h - pad * 2);
@@ -103,6 +134,7 @@ export function FlipViewer({
     const power = info.offset.x + info.velocity.x * 0.18;
     if (power < -90) onNext();
     else if (power > 90) onPrev();
+    if (!book) void animate(dragX, 0, { type: "spring", stiffness: 360, damping: 30 });
   };
 
   return (
@@ -115,7 +147,7 @@ export function FlipViewer({
         style={{ padding: pad }}
       >
         <motion.div
-          drag={zoom > 1.05 ? false : "x"}
+          drag={book && zoom <= 1.05 ? "x" : false}
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.16}
           dragMomentum={false}
@@ -136,14 +168,35 @@ export function FlipViewer({
             <motion.div
               key={key}
               custom={direction}
-              variants={variants}
+              variants={book ? variants : singleFoldVariants}
               initial="enter"
               animate="center"
               exit="exit"
-              transition={spring}
-              className="preserve-3d backface-hidden absolute inset-0 flex"
-              style={{ transformOrigin: "center center" }}
+              transition={
+                book
+                  ? spring
+                  : { type: "spring", stiffness: 125, damping: 21, mass: 0.82 }
+              }
+              className="preserve-3d absolute inset-0"
+              style={{
+                transformOrigin: book
+                  ? "center center"
+                  : direction > 0
+                    ? "left center"
+                    : "right center",
+              }}
             >
+              <motion.div
+                className="preserve-3d backface-hidden absolute inset-0 flex"
+                style={
+                  book
+                    ? undefined
+                    : {
+                        rotateY: dragRotate,
+                        transformOrigin: foldSide < 0 ? "left center" : "right center",
+                      }
+                }
+              >
               {book ? (
                 <PaperShell className="flex w-full rounded-xl">
                   <div className="relative h-full" style={{ width: pageW }}>
@@ -165,12 +218,78 @@ export function FlipViewer({
                 </PaperShell>
               )}
 
-              {/* light sheen sweeping across on every flip */}
-              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-                <div className="animate-sheen absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-              </div>
+                {/* Moving light makes the curved paper edge readable. */}
+                <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+                  <div className="animate-sheen absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+                  {!book && (
+                    <div
+                      className={cn(
+                        "absolute inset-y-0 w-1/3 blur-md",
+                        direction > 0
+                          ? "right-0 bg-gradient-to-l from-black/45 via-black/12 to-transparent"
+                          : "left-0 bg-gradient-to-r from-black/45 via-black/12 to-transparent",
+                      )}
+                    />
+                  )}
+                </div>
+              </motion.div>
+
+              {!book && (
+                <div
+                  className="backface-hidden pointer-events-none absolute inset-0 overflow-hidden rounded-xl bg-[#f6f2e9] shadow-[inset_0_0_70px_rgba(72,54,35,0.16)] ring-1 ring-black/10"
+                  style={{ transform: "rotateY(180deg)" }}
+                >
+                  <div className="absolute inset-0 opacity-50 [background-image:repeating-linear-gradient(0deg,transparent,transparent_3px,rgba(80,60,40,0.025)_4px)]" />
+                  <div
+                    className={cn(
+                      "absolute inset-y-0 w-1/2",
+                      direction > 0
+                        ? "left-0 bg-gradient-to-r from-black/25 to-transparent"
+                        : "right-0 bg-gradient-to-l from-black/25 to-transparent",
+                    )}
+                  />
+                  <div className="absolute inset-y-0 left-1/2 w-20 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent blur-lg" />
+                  <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-semibold tracking-widest text-stone-400">
+                    {page}
+                  </span>
+                </div>
+              )}
+
+              {!book && (
+                <>
+                  <motion.div
+                    className={cn(
+                      "pointer-events-none absolute inset-y-0 z-20 w-[38%] blur-sm",
+                      foldSide < 0
+                        ? "right-0 bg-gradient-to-l from-black/65 via-black/20 to-transparent"
+                        : "left-0 bg-gradient-to-r from-black/65 via-black/20 to-transparent",
+                    )}
+                    style={{ opacity: dragShade }}
+                  />
+                  <motion.div
+                    className="pointer-events-none absolute inset-y-0 z-20 w-20 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/70 to-transparent blur-md"
+                    style={{ left: dragHighlight, opacity: dragShade }}
+                  />
+                </>
+              )}
             </motion.div>
           </AnimatePresence>
+
+          {!book && zoom <= 1.05 && (
+            <motion.div
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.24}
+              dragMomentum={false}
+              style={{ x: dragX }}
+              onDrag={(_e, info) => setFoldSide(info.offset.x < 0 ? -1 : 1)}
+              onDragEnd={onDragEnd}
+              className="absolute inset-0 z-30 cursor-grab touch-pan-y active:cursor-grabbing"
+              aria-label="Geser halaman"
+            >
+              <div className="h-full w-full opacity-0" />
+            </motion.div>
+          )}
         </motion.div>
       </div>
 
