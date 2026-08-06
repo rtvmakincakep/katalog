@@ -161,7 +161,6 @@ export default function App() {
     setPage(1);
     setZoom(1);
     setRotation(0);
-    setDirection(1);
     setAspect(await getPageAspect(next, 1, 0));
     return next;
   }, []);
@@ -179,7 +178,8 @@ export default function App() {
     async (p: Publication, opts: { silent?: boolean } = {}) => {
       setPub(p);
       setDark(p.dark);
-      setMode(p.mode === "book" && window.innerWidth < 1024 ? "single" : p.mode);
+      /* Setiap sesi pembaca selalu dimulai dari tampilan satu halaman. */
+      if (!loadedKey.current) setMode("single");
 
       const key = p.path;
       if (key && key === loadedKey.current) return;
@@ -283,8 +283,6 @@ export default function App() {
       pubRef.current = next;
       lastLocalEdit.current = Date.now();
       if (partial.dark !== undefined) setDark(partial.dark);
-      if (partial.mode !== undefined)
-        setMode(partial.mode === "book" && window.innerWidth < 1024 ? "single" : partial.mode);
       window.clearTimeout(patchTimer.current);
       patchTimer.current = window.setTimeout(() => void persist(next), 500);
     },
@@ -468,6 +466,15 @@ export default function App() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
+  const onWheel = (e: React.WheelEvent) => {
+    if (!doc || mode === "scroll" || zoom > 1.05 || adminOpen || Math.abs(e.deltaY) < 12) return;
+    const now = Date.now();
+    if (now < wheelLock.current) return;
+    wheelLock.current = now + 500;
+    if (e.deltaY > 0) next();
+    else prev();
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -556,16 +563,6 @@ export default function App() {
       window.removeEventListener("drop", stop);
     };
   }, []);
-
-  const onWheel = (e: React.WheelEvent) => {
-    if (!doc || mode === "scroll" || zoom > 1.05 || adminOpen) return;
-    if (Math.abs(e.deltaY) < 12) return;
-    const now = Date.now();
-    if (now < wheelLock.current) return;
-    wheelLock.current = now + 480;
-    if (e.deltaY > 0) next();
-    else prev();
-  };
 
   const download = () => {
     if (!bytesRef.current || !pub.allowDownload) return;
@@ -701,7 +698,7 @@ export default function App() {
           )}
 
           <AnimatePresence>
-            {doc && hint && mode !== "scroll" && (
+            {doc && hint && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -709,14 +706,20 @@ export default function App() {
                 className="pointer-events-none absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-ink-900/85 px-4 py-2 text-[11.5px] font-medium text-white shadow-xl backdrop-blur sm:bottom-24 sm:text-[12px] dark:bg-white/10"
               >
                 <motion.span
-                  animate={{ x: [-4, 4, -4] }}
+                  animate={mode === "scroll" ? { y: [-3, 3, -3] } : { x: [-3, 3, -3] }}
                   transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
                   className="flex"
                 >
-                  <Icon name="left" className="h-4 w-4" />
-                  <Icon name="right" className="h-4 w-4" />
+                  <Icon
+                    name={mode === "scroll" ? "scroll" : mode === "book" ? "book" : "page"}
+                    className="h-4 w-4"
+                  />
                 </motion.span>
-                Geser halaman untuk membaca
+                {mode === "scroll"
+                  ? "Gulir ke bawah untuk membaca"
+                  : mode === "book"
+                    ? "Geser untuk membalik buku"
+                    : "Geser untuk berpindah halaman"}
               </motion.div>
             )}
           </AnimatePresence>

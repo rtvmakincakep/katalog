@@ -539,37 +539,6 @@ function Dashboard(props: {
                         className={inputCls}
                       />
                     </Field>
-                    <Field label="Mode baca awal">
-                      <div className="mt-1.5 grid grid-cols-3 gap-1.5 rounded-xl bg-slate-900/5 p-1 dark:bg-white/5">
-                        {(
-                          [
-                            ["single", "Halaman"],
-                            ["book", "Buku"],
-                            ["scroll", "Gulir"],
-                          ] as const
-                        ).map(([id, label]) => (
-                          <button
-                            key={id}
-                            onClick={() => patch({ mode: id })}
-                            className={cn(
-                              "relative rounded-lg py-2 text-[12px] font-bold transition",
-                              pub.mode === id
-                                ? "text-white"
-                                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white",
-                            )}
-                          >
-                            {pub.mode === id && (
-                              <motion.span
-                                layoutId="admin-mode"
-                                transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                                className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                              />
-                            )}
-                            <span className="relative">{label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
                   </div>
                 </Card>
 
