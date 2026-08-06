@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AdminOverlay, LockTrigger } from "@/components/Admin";
-import { Dock, Sidebar, TopBar } from "@/components/Chrome";
+import { Dock, Sidebar, TopBar, type ViewMode } from "@/components/Chrome";
 import { Icon } from "@/components/icons";
-import { ScrollViewer } from "@/components/Viewers";
+import { FlipViewer, ScrollViewer } from "@/components/Viewers";
 import {
   FIREBASE_CONNECTION,
   hasFirebase,
@@ -85,6 +85,7 @@ function Splash({ label }: { label: string }) {
 export default function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const bytesRef = useRef<Uint8Array | null>(null);
+  const wheelLock = useRef(0);
   const pageRef = useRef(1);
   const loadedKey = useRef<string>("");
   const patchTimer = useRef<number | undefined>(undefined);
@@ -109,8 +110,10 @@ export default function App() {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [direction, setDirection] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [mode, setMode] = useState<ViewMode>("single");
   const [aspect, setAspect] = useState(1 / 1.414);
   const [dark, setDark] = useState(true);
   const [sidebar, setSidebar] = useState(false);
@@ -158,6 +161,7 @@ export default function App() {
     setPage(1);
     setZoom(1);
     setRotation(0);
+    setDirection(1);
     setAspect(await getPageAspect(next, 1, 0));
     return next;
   }, []);
@@ -175,6 +179,7 @@ export default function App() {
     async (p: Publication, opts: { silent?: boolean } = {}) => {
       setPub(p);
       setDark(p.dark);
+      setMode(p.mode === "book" && window.innerWidth < 1024 ? "single" : p.mode);
 
       const key = p.path;
       if (key && key === loadedKey.current) return;
@@ -278,6 +283,8 @@ export default function App() {
       pubRef.current = next;
       lastLocalEdit.current = Date.now();
       if (partial.dark !== undefined) setDark(partial.dark);
+      if (partial.mode !== undefined)
+        setMode(partial.mode === "book" && window.innerWidth < 1024 ? "single" : partial.mode);
       window.clearTimeout(patchTimer.current);
       patchTimer.current = window.setTimeout(() => void persist(next), 500);
     },
@@ -429,12 +436,13 @@ export default function App() {
   );
 
   /* ---------------- navigation ---------------- */
-  const step = 1;
+  const step = mode === "book" ? 2 : 1;
 
   const goto = useCallback(
-    (p: number, _dir?: number) => {
+    (p: number, dir?: number) => {
       const target = Math.min(Math.max(1, p), Math.max(1, numPages));
       if (target === pageRef.current) return;
+      setDirection(dir ?? (target > pageRef.current ? 1 : -1));
       pageRef.current = target;
       setPage(target);
     },
@@ -549,6 +557,16 @@ export default function App() {
     };
   }, []);
 
+  const onWheel = (e: React.WheelEvent) => {
+    if (!doc || mode === "scroll" || zoom > 1.05 || adminOpen) return;
+    if (Math.abs(e.deltaY) < 12) return;
+    const now = Date.now();
+    if (now < wheelLock.current) return;
+    wheelLock.current = now + 480;
+    if (e.deltaY > 0) next();
+    else prev();
+  };
+
   const download = () => {
     if (!bytesRef.current || !pub.allowDownload) return;
     const blob = new Blob([bytesRef.current.slice().buffer as ArrayBuffer], {
@@ -610,7 +628,7 @@ export default function App() {
           />
         )}
 
-        <main className="relative min-w-0 flex-1">
+        <main className="relative min-w-0 flex-1" onWheel={onWheel}>
           {doc && (
             <div className="absolute inset-x-0 top-0 z-20 h-[3px] bg-slate-900/5 dark:bg-white/5">
               <motion.div
@@ -621,17 +639,31 @@ export default function App() {
             </div>
           )}
 
-          {doc && (
-            <ScrollViewer
-              doc={doc}
-              page={page}
-              numPages={numPages}
-              aspect={aspect}
-              rotation={rotation}
-              zoom={zoom}
-              onPageChange={(p) => goto(p)}
-            />
-          )}
+          {doc &&
+            (mode === "scroll" ? (
+              <ScrollViewer
+                doc={doc}
+                page={page}
+                numPages={numPages}
+                aspect={aspect}
+                rotation={rotation}
+                zoom={zoom}
+                onPageChange={(p) => goto(p)}
+              />
+            ) : (
+              <FlipViewer
+                doc={doc}
+                page={page}
+                numPages={numPages}
+                direction={direction}
+                aspect={aspect}
+                rotation={rotation}
+                zoom={zoom}
+                book={mode === "book"}
+                onNext={next}
+                onPrev={prev}
+              />
+            ))}
 
           {!doc && !booting && (
             <div className="absolute inset-0 grid place-items-center px-6 text-center">
@@ -655,6 +687,7 @@ export default function App() {
               page={page}
               numPages={numPages}
               zoom={zoom}
+              mode={mode}
               fullscreen={fullscreen}
               onPrev={prev}
               onNext={next}
@@ -662,12 +695,13 @@ export default function App() {
               onZoom={changeZoom}
               onResetZoom={() => setZoom(1)}
               onRotate={() => setRotation((r) => (r + 90) % 360)}
+              onMode={setMode}
               onFullscreen={toggleFullscreen}
             />
           )}
 
           <AnimatePresence>
-            {doc && hint && (
+            {doc && hint && mode !== "scroll" && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -675,13 +709,14 @@ export default function App() {
                 className="pointer-events-none absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-ink-900/85 px-4 py-2 text-[11.5px] font-medium text-white shadow-xl backdrop-blur sm:bottom-24 sm:text-[12px] dark:bg-white/10"
               >
                 <motion.span
-                  animate={{ y: [-3, 3, -3] }}
+                  animate={{ x: [-4, 4, -4] }}
                   transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
                   className="flex"
                 >
-                  <Icon name="scroll" className="h-4 w-4" />
+                  <Icon name="left" className="h-4 w-4" />
+                  <Icon name="right" className="h-4 w-4" />
                 </motion.span>
-                Gulir ke bawah untuk membaca
+                Geser halaman untuk membaca
               </motion.div>
             )}
           </AnimatePresence>

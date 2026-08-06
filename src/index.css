@@ -117,20 +117,6 @@ body {
   animation: sheen 0.85s ease-out;
 }
 
-.pdf-scroll-page {
-  transform-style: preserve-3d;
-  transform-origin: center center;
-  will-change: transform, opacity, filter;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pdf-scroll-page {
-    transform: none !important;
-    filter: none !important;
-    opacity: 1 !important;
-  }
-}
-
 /* text selection */
 ::selection {
   background: rgba(139, 92, 246, 0.35);

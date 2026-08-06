@@ -115,10 +115,13 @@ export function TopBar({
 /* Bottom dock                                                         */
 /* ------------------------------------------------------------------ */
 
+export type ViewMode = "single" | "book" | "scroll";
+
 export function Dock({
   page,
   numPages,
   zoom,
+  mode,
   fullscreen,
   onPrev,
   onNext,
@@ -126,11 +129,13 @@ export function Dock({
   onZoom,
   onResetZoom,
   onRotate,
+  onMode,
   onFullscreen,
 }: {
   page: number;
   numPages: number;
   zoom: number;
+  mode: ViewMode;
   fullscreen: boolean;
   onPrev: () => void;
   onNext: () => void;
@@ -138,6 +143,7 @@ export function Dock({
   onZoom: (delta: number) => void;
   onResetZoom: () => void;
   onRotate: () => void;
+  onMode: (m: ViewMode) => void;
   onFullscreen: () => void;
 }) {
   const [draft, setDraft] = useState(String(page));
@@ -148,6 +154,12 @@ export function Dock({
     if (!Number.isNaN(n)) onGoto(Math.min(numPages, Math.max(1, n)));
     else setDraft(String(page));
   };
+
+  const modes: { id: ViewMode; icon: IconName; label: string; hideSm?: boolean }[] = [
+    { id: "single", icon: "page", label: "Satu halaman" },
+    { id: "book", icon: "book", label: "Mode buku", hideSm: true },
+    { id: "scroll", icon: "scroll", label: "Gulir vertikal" },
+  ];
 
   return (
     <motion.div
@@ -201,6 +213,31 @@ export function Dock({
         <Divider />
 
         <IconButton icon="rotate" label="Putar 90 derajat" onClick={onRotate} className="hidden sm:grid" />
+
+        <div className="flex items-center gap-0.5 rounded-xl bg-slate-900/5 p-0.5 dark:bg-white/5">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => onMode(m.id)}
+              title={m.label}
+              aria-label={m.label}
+              className={cn(
+                "relative grid h-8 w-8 place-items-center rounded-[10px] text-slate-600 transition dark:text-slate-300",
+                m.hideSm && "hidden lg:grid",
+                mode === m.id && "text-white dark:text-white",
+              )}
+            >
+              {mode === m.id && (
+                <motion.span
+                  layoutId="mode-pill"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  className="absolute inset-0 rounded-[10px] bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-md shadow-violet-600/30"
+                />
+              )}
+              <Icon name={m.icon} className="relative h-[17px] w-[17px]" />
+            </button>
+          ))}
+        </div>
 
         <IconButton
           icon={fullscreen ? "shrink" : "expand"}

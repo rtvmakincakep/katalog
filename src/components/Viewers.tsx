@@ -247,79 +247,32 @@ export function ScrollViewer({
   }, [page]);
 
   return (
-    <div ref={ref} className="nice-scroll h-full w-full overflow-y-auto overflow-x-hidden overscroll-contain">
+    <div ref={ref} className="nice-scroll h-full w-full overflow-auto overscroll-contain">
       <div className="flex flex-col items-center gap-5 py-6 sm:gap-8 sm:py-10">
         {Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
           <motion.div
             key={p}
-            custom={p % 2 === 0 ? 1 : -1}
             data-page={p}
             ref={(el) => {
               items.current[p] = el;
             }}
-            variants={{
-              hidden: (side: number) => ({
-                opacity: 0.18,
-                x: side * 58,
-                y: 70,
-                scale: 0.91,
-                rotateY: side * -7,
-                rotateZ: side * 0.75,
-                filter: "blur(7px)",
-              }),
-              visible: {
-                opacity: 1,
-                x: 0,
-                y: 0,
-                scale: 1,
-                rotateY: 0,
-                rotateZ: 0,
-                filter: "blur(0px)",
-              },
-            }}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ amount: 0.16, margin: "-4% 0px -4% 0px" }}
-            transition={{
-              type: "spring",
-              stiffness: 105,
-              damping: 21,
-              mass: 0.9,
-              opacity: { duration: 0.55 },
-              filter: { duration: 0.5 },
-            }}
-            className="pdf-scroll-page relative shrink-0 scroll-mt-4"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="relative shrink-0 scroll-mt-4 overflow-hidden rounded-lg bg-white shadow-[0_20px_60px_-25px_rgba(15,10,45,0.55)] ring-1 ring-black/5 dark:shadow-[0_25px_70px_-25px_rgba(0,0,0,0.9)] dark:ring-white/10"
             style={{ width: pageW, height: pageH }}
           >
-            <motion.div
-              variants={{
-                hidden: { opacity: 0, scale: 0.86 },
-                visible: { opacity: [0, 0.75, 0], scale: [0.86, 1.04, 1.08] },
-              }}
-              transition={{ duration: 1.1, times: [0, 0.35, 1], ease: "easeOut" }}
-              className="pointer-events-none absolute -inset-3 rounded-xl bg-gradient-to-br from-violet-500/65 via-fuchsia-500/40 to-cyan-400/55 blur-xl"
+            <PdfCanvas
+              doc={doc}
+              pageNumber={p}
+              width={pageW}
+              rotation={rotation}
+              eager={false}
+              quality={1.75}
             />
-            <div className="relative h-full w-full overflow-hidden rounded-lg bg-white shadow-[0_26px_70px_-24px_rgba(15,10,45,0.62)] ring-1 ring-black/5 dark:shadow-[0_30px_80px_-24px_rgba(0,0,0,0.95)] dark:ring-white/10">
-              <PdfCanvas
-                doc={doc}
-                pageNumber={p}
-                width={pageW}
-                rotation={rotation}
-                eager={false}
-                quality={1.75}
-              />
-              <motion.div
-                variants={{
-                  hidden: { x: "-130%", opacity: 0 },
-                  visible: { x: "230%", opacity: [0, 0.5, 0] },
-                }}
-                transition={{ duration: 1.05, delay: 0.16, ease: "easeOut" }}
-                className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-16deg] bg-gradient-to-r from-transparent via-white/75 to-transparent"
-              />
-              <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-ink-900/70 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur">
-                {p}
-              </span>
-            </div>
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-ink-900/70 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur">
+              {p}
+            </span>
           </motion.div>
         ))}
       </div>
